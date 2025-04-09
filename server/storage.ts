@@ -70,7 +70,7 @@ export interface IStorage {
   }>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 }
 
 export class MemStorage implements IStorage {
@@ -80,7 +80,7 @@ export class MemStorage implements IStorage {
   private groups: Map<number, Group>;
   private groupMembers: Map<number, GroupMember>;
   private expenseSplits: Map<number, ExpenseSplit>;
-  sessionStore: session.SessionStore;
+  sessionStore: any;
   
   currentUserId: number;
   currentCategoryId: number;
@@ -300,7 +300,12 @@ export class MemStorage implements IStorage {
   
   async createExpenseSplit(split: InsertExpenseSplit): Promise<ExpenseSplit> {
     const id = this.currentExpenseSplitId++;
-    const newSplit: ExpenseSplit = { ...split, id };
+    // Ensure paid property is defined with a default if not present
+    const newSplit: ExpenseSplit = { 
+      ...split, 
+      id,
+      paid: split.paid ?? false // Default to false if paid is undefined
+    };
     this.expenseSplits.set(id, newSplit);
     return newSplit;
   }
@@ -376,4 +381,8 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Import our database storage implementation
+import { DatabaseStorage } from "./database-storage";
+
+// Use DatabaseStorage implementation which connects to PostgreSQL
+export const storage = new DatabaseStorage();

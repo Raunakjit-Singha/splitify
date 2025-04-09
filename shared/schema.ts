@@ -1,6 +1,7 @@
-import { pgTable, text, serial, integer, boolean, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, numeric, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -20,6 +21,12 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+export const usersRelations = relations(users, ({ many }) => ({
+  expenses: many(expenses),
+  groupMemberships: many(groupMembers),
+  expenseSplits: many(expenseSplits),
+}));
+
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -30,6 +37,10 @@ export const categories = pgTable("categories", {
 export const insertCategorySchema = createInsertSchema(categories);
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
+
+export const categoriesRelations = relations(categories, ({ many }) => ({
+  expenses: many(expenses),
+}));
 
 export const expenses = pgTable("expenses", {
   id: serial("id").primaryKey(),
@@ -57,6 +68,22 @@ export const insertExpenseSchema = createInsertSchema(expenses).pick({
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
 
+export const expensesRelations = relations(expenses, ({ one, many }) => ({
+  user: one(users, {
+    fields: [expenses.user_id],
+    references: [users.id],
+  }),
+  category: one(categories, {
+    fields: [expenses.category_id],
+    references: [categories.id],
+  }),
+  group: one(groups, {
+    fields: [expenses.group_id],
+    references: [groups.id],
+  }),
+  splits: many(expenseSplits),
+}));
+
 export const groups = pgTable("groups", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -73,6 +100,15 @@ export const insertGroupSchema = createInsertSchema(groups).pick({
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type Group = typeof groups.$inferSelect;
 
+export const groupsRelations = relations(groups, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [groups.created_by],
+    references: [users.id],
+  }),
+  members: many(groupMembers),
+  expenses: many(expenses),
+}));
+
 export const groupMembers = pgTable("group_members", {
   id: serial("id").primaryKey(),
   group_id: integer("group_id").notNull(),
@@ -87,6 +123,17 @@ export const insertGroupMemberSchema = createInsertSchema(groupMembers).pick({
 
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type GroupMember = typeof groupMembers.$inferSelect;
+
+export const groupMembersRelations = relations(groupMembers, ({ one }) => ({
+  group: one(groups, {
+    fields: [groupMembers.group_id],
+    references: [groups.id],
+  }),
+  user: one(users, {
+    fields: [groupMembers.user_id],
+    references: [users.id],
+  }),
+}));
 
 export const expenseSplits = pgTable("expense_splits", {
   id: serial("id").primaryKey(),
@@ -105,3 +152,14 @@ export const insertExpenseSplitSchema = createInsertSchema(expenseSplits).pick({
 
 export type InsertExpenseSplit = z.infer<typeof insertExpenseSplitSchema>;
 export type ExpenseSplit = typeof expenseSplits.$inferSelect;
+
+export const expenseSplitsRelations = relations(expenseSplits, ({ one }) => ({
+  expense: one(expenses, {
+    fields: [expenseSplits.expense_id],
+    references: [expenses.id],
+  }),
+  user: one(users, {
+    fields: [expenseSplits.user_id],
+    references: [users.id],
+  }),
+}));
