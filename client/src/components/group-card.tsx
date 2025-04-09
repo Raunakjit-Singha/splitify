@@ -1,10 +1,16 @@
 import { Link } from "wouter";
-import { Group } from "@shared/schema";
+import { Group, User, Expense } from "@shared/schema";
 import { formatCurrency } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+interface GroupDetailsResponse {
+  group: Group;
+  members: (User & { joined_at: Date })[];
+  expenses: Expense[];
+}
 
 type GroupCardProps = {
   group: Group;
@@ -12,7 +18,7 @@ type GroupCardProps = {
 };
 
 export default function GroupCard({ group, detailsLink = false }: GroupCardProps) {
-  const { data: groupDetails, isLoading } = useQuery({
+  const { data: groupDetails, isLoading } = useQuery<GroupDetailsResponse>({
     queryKey: ["/api/groups", group.id],
     enabled: !!group.id,
   });
@@ -61,7 +67,7 @@ export default function GroupCard({ group, detailsLink = false }: GroupCardProps
         ) : (
           <>
             <div className="flex items-center space-x-2 mb-4">
-              {groupDetails?.members.slice(0, 3).map((member) => (
+              {groupDetails?.members && groupDetails.members.slice(0, 3).map((member: User & { joined_at: Date }) => (
                 <Avatar key={member.id} className="h-8 w-8">
                   <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
                 </Avatar>
@@ -79,10 +85,12 @@ export default function GroupCard({ group, detailsLink = false }: GroupCardProps
               <span className="font-medium text-gray-500 dark:text-gray-400">Total expenses</span>
               <span className="font-medium tabular-nums text-gray-900 dark:text-white">
                 {formatCurrency(
-                  groupDetails?.expenses?.reduce(
-                    (sum, expense) => sum + parseFloat(expense.amount.toString()), 
-                    0
-                  ) || 0
+                  groupDetails?.expenses && groupDetails.expenses.length > 0
+                    ? groupDetails.expenses.reduce(
+                        (sum: number, expense: Expense) => sum + parseFloat(expense.amount.toString()), 
+                        0
+                      )
+                    : 0
                 )}
               </span>
             </div>
