@@ -19,7 +19,7 @@ import {
   type InsertExpenseSplit
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, or, ne } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { IStorage } from "./storage";
@@ -166,7 +166,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Extract group IDs
-    const groupIds = members.map(member => member.group_id);
+    const groupIds = members.map((member: GroupMember) => member.group_id);
     
     // Get all groups where the user is a member
     return db.select()
@@ -196,7 +196,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Extract user IDs
-    const userIds = groupMemberRecords.map(member => member.user_id);
+    const userIds = groupMemberRecords.map((member: GroupMember) => member.user_id);
     
     // Get all users who are members
     const groupUsers = await db.select()
@@ -204,8 +204,8 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(users.id, userIds));
     
     // Combine user data with joined_at date
-    return groupUsers.map(user => {
-      const memberRecord = groupMemberRecords.find(m => m.user_id === user.id);
+    return groupUsers.map((user: User) => {
+      const memberRecord = groupMemberRecords.find((m: GroupMember) => m.user_id === user.id);
       return {
         ...user,
         joined_at: memberRecord!.joined_at
@@ -259,7 +259,8 @@ export class DatabaseStorage implements IStorage {
   }> {
     // Calculate total spent by user
     const userExpenses = await this.getAllExpensesByUser(userId);
-    const totalSpent = userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount.toString()), 0);
+    const totalSpent = userExpenses.reduce((sum: number, expense: Expense) => 
+      sum + parseFloat(expense.amount.toString()), 0);
     
     // Calculate spending by category
     const categoryTotals = new Map<number, number>();
@@ -284,7 +285,7 @@ export class DatabaseStorage implements IStorage {
       .from(expenseSplits)
       .where(eq(expenseSplits.user_id, userId));
     
-    const splitExpenseIds = userSplits.map(split => split.expense_id);
+    const splitExpenseIds = userSplits.map((split: ExpenseSplit) => split.expense_id);
     
     // Get the expense details for these splits
     const splitExpenses = await db.select()
@@ -292,7 +293,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           inArray(expenses.id, splitExpenseIds),
-          eq(expenses.user_id, userId) // Expenses the user created that have splits
+          ne(expenses.user_id, userId) // Expenses NOT created by user
         )
       );
     
@@ -302,27 +303,18 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(expenseSplits.user_id, userId),
-          or(
-            ...splitExpenseIds.map(id => eq(expenseSplits.expense_id, id))
-          )
-        )
-      );
-    
-    // Get the relevant expenses for these splits
-    const userOwesExpenses = await db.select()
-      .from(expenses)
-      .where(
-        and(
-          inArray(expenses.id, userOwesSplits.map(split => split.expense_id)),
-          eq(expenses.user_id, userId) // Expenses the user created
+          inArray(expenseSplits.expense_id, splitExpenses.map(expense => expense.id))
         )
       );
     
     // Calculate what user owes to others
-    const uniqueOwedGroups = new Set(userOwesExpenses.map(expense => expense.group_id).filter(Boolean));
+    const uniqueOwedGroups = new Set(splitExpenses
+      .map(expense => expense.group_id)
+      .filter(Boolean));
     
     const userOwesDetails = {
-      total: userOwesSplits.reduce((sum, split) => sum + parseFloat(split.amount.toString()), 0),
+      total: userOwesSplits.reduce((sum: number, split: ExpenseSplit) => 
+        sum + parseFloat(split.amount.toString()), 0),
       count: userOwesSplits.length,
       groups: uniqueOwedGroups.size
     };
@@ -335,19 +327,22 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           inArray(expenseSplits.expense_id, userExpenseIds),
-          eq(expenseSplits.user_id, userId) // Splits belonging to the user
+          ne(expenseSplits.user_id, userId) // Splits NOT belonging to the user
         )
       );
     
     // Calculate what others owe to the user
     const uniqueOwingGroups = new Set(
-      (await db.select().from(expenses).where(inArray(expenses.id, othersOweSplits.map(split => split.expense_id))))
+      (await db.select()
+        .from(expenses)
+        .where(inArray(expenses.id, userExpenseIds)))
         .map(expense => expense.group_id)
         .filter(Boolean)
     );
     
     const othersOweDetails = {
-      total: othersOweSplits.reduce((sum, split) => sum + parseFloat(split.amount.toString()), 0),
+      total: othersOweSplits.reduce((sum: number, split: ExpenseSplit) => 
+        sum + parseFloat(split.amount.toString()), 0),
       count: othersOweSplits.length,
       groups: uniqueOwingGroups.size
     };
