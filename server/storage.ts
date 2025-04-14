@@ -20,7 +20,6 @@ import {
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
-// Import our database storage implementation
 import { DatabaseStorage } from "./database-storage";
 
 const MemoryStore = createMemoryStore(session);

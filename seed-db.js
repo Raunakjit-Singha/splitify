@@ -1,7 +1,18 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from 'ws';
-import * as schema from './shared/schema.js';
+// We need to import the schema using dynamic import since it's a TypeScript file
+let schema;
+const importSchema = async () => {
+  try {
+    const module = await import('./shared/schema.js');
+    schema = module;
+    return module;
+  } catch (error) {
+    console.error('Error importing schema:', error);
+    process.exit(1);
+  }
+};
 
 // Configure Neon to use WebSockets
 neonConfig.webSocketConstructor = ws;
@@ -26,6 +37,9 @@ if (!process.env.DATABASE_URL) {
 
 async function main() {
   console.log('Connecting to database for seeding...');
+  
+  // Import schema first
+  await importSchema();
   
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
